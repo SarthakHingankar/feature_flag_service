@@ -21,7 +21,10 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/featureflags
     ports:
       - "3000:3000"
-    command: sh -c "npx prisma migrate deploy && node src/index.js"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npx prisma migrate deploy && npx nodemon --legacy-watch --watch src src/index.js"
 
 volumes:
   pgdata:

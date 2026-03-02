@@ -19,11 +19,12 @@
   },
   "homepage": "https://github.com/SarthakHingankar/feature_flag_service#readme",
   "dependencies": {
-    "@prisma/client": "^7.4.1",
+    "@prisma/client": "^6.19.2",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "prisma": "^6.19.2"
   },
   "devDependencies": {
-    "prisma": "^7.4.1"
+    "nodemon": "^3.1.14"
   }
 }
