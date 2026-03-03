@@ -222,6 +222,178 @@ app.get("/projects/:projectId/environments/:envId/flags", async (req, res) => {
     }
 });
 
+app.patch(
+    "/projects/:projectId/environments/:envId/flags/:flagId",
+    async (req, res) => {
+        try {
+            const { projectId, envId, flagId } = req.params;
+
+            if (!req.body || typeof req.body !== "object") {
+                return res.status(400).json({ error: "Invalid request body" });
+            }
+
+            const { enabled, description } = req.body;
+
+            if (
+                enabled === undefined &&
+                description === undefined
+            ) {
+                return res.status(400).json({
+                    error: "At least one field (enabled or description) must be provided",
+                });
+            }
+
+            if (enabled !== undefined && typeof enabled !== "boolean") {
+                return res.status(400).json({
+                    error: "Enabled must be boolean",
+                });
+            }
+
+            if (
+                description !== undefined &&
+                typeof description !== "string"
+            ) {
+                return res.status(400).json({
+                    error: "Description must be string",
+                });
+            }
+
+            const result = await prisma.$transaction(async (tx) => {
+                // Validate hierarchy + existence
+                const flag = await tx.featureFlag.findFirst({
+                    where: {
+                        id: flagId,
+                        environmentId: envId,
+                        environment: {
+                            projectId: projectId,
+                        },
+                    },
+                });
+
+                if (!flag) {
+                    throw { type: "NOT_FOUND" };
+                }
+
+                const beforeSnapshot = flag;
+
+                const updatedFlag = await tx.featureFlag.update({
+                    where: { id: flagId },
+                    data: {
+                        ...(enabled !== undefined && { enabled }),
+                        ...(description !== undefined && {
+                            description: description.trim(),
+                        }),
+                    },
+                });
+
+                await tx.auditLog.create({
+                    data: {
+                        entityType: "FeatureFlag",
+                        entityId: flagId,
+                        action: "UPDATE",
+                        actor: "system", // hardcoded for Phase 2
+                        before: beforeSnapshot,
+                        after: updatedFlag,
+                    },
+                });
+
+                return updatedFlag;
+            });
+
+            return res.status(200).json({
+                id: result.id,
+                key: result.key,
+                description: result.description,
+                enabled: result.enabled,
+                createdAt: result.createdAt,
+            });
+
+        } catch (error) {
+            if (error?.type === "NOT_FOUND") {
+                return res.status(404).json({
+                    error: "Flag not found under specified project/environment",
+                });
+            }
+
+            console.error("PATCH /flags failed:", error);
+
+            return res.status(500).json({
+                error: "Internal server error",
+            });
+        }
+    }
+);
+
+app.get("/audit-logs", async (req, res) => {
+    try {
+        const { entityType, entityId, limit } = req.query;
+
+        let parsedLimit = 50;
+
+        if (limit !== undefined) {
+            const numericLimit = Number(limit);
+
+            if (!Number.isInteger(numericLimit) || numericLimit <= 0) {
+                return res.status(400).json({
+                    error: "Limit must be a positive integer",
+                });
+            }
+
+            parsedLimit = Math.min(numericLimit, 200);
+        }
+
+        const whereClause = {};
+
+        if (entityType !== undefined) {
+            if (typeof entityType !== "string" || !entityType.trim()) {
+                return res.status(400).json({
+                    error: "entityType must be a non-empty string",
+                });
+            }
+
+            whereClause.entityType = entityType.trim();
+        }
+
+        if (entityId !== undefined) {
+            if (typeof entityId !== "string" || !entityId.trim()) {
+                return res.status(400).json({
+                    error: "entityId must be a non-empty string",
+                });
+            }
+
+            whereClause.entityId = entityId.trim();
+        }
+
+        const logs = await prisma.auditLog.findMany({
+            where: whereClause,
+            orderBy: { createdAt: "desc" },
+            take: parsedLimit,
+            select: {
+                id: true,
+                entityType: true,
+                entityId: true,
+                action: true,
+                actor: true,
+                before: true,
+                after: true,
+                createdAt: true,
+            },
+        });
+
+        return res.status(200).json({
+            data: logs,
+            count: logs.length,
+        });
+
+    } catch (error) {
+        console.error("GET /audit-logs failed:", error);
+
+        return res.status(500).json({
+            error: "Internal server error",
+        });
+    }
+});
+
 app.get("/health", (req, res) => {
     res.json({ status: "ok" });
 });

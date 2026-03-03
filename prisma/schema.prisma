@@ -39,3 +39,14 @@ model FeatureFlag {
 
   @@unique([environmentId, key])
 }
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  action     String
+  actor      String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+}
