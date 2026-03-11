@@ -1,4 +1,4 @@
-const { ValidationError } = require("../errors");
+const { ValidationError } = require("../utils/errors");
 const flagService = require("../services/flag.service");
 
 async function createFlag(req, res) {

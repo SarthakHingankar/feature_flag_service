@@ -111,8 +111,6 @@ describe("Feature Flag Evaluation Engine", () => {
         const resultA = evaluate(user, flagA);
         const resultB = evaluate(user, flagB);
 
-        // Both flags should not always produce identical results
-        // This ensures flagKey participates in hashing
         expect(typeof resultA).toBe("boolean");
         expect(typeof resultB).toBe("boolean");
     });

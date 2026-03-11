@@ -1,4 +1,4 @@
-const { ValidationError } = require("../errors");
+const { ValidationError } = require("../utils/errors");
 const environmentService = require("../services/environment.service");
 
 async function createEnvironment(req, res) {

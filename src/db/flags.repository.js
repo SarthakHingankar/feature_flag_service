@@ -1,5 +1,5 @@
-const prisma = require("../prisma");
-const { NotFoundError } = require("../errors");
+const prisma = require("./prisma");
+const { NotFoundError } = require("../utils/errors");
 
 function buildRules(flag) {
     const rules = [];

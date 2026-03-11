@@ -1,5 +1,5 @@
-const prisma = require("../prisma");
-const { NotFoundError, ConflictError } = require("../errors");
+const prisma = require("../db/prisma");
+const { NotFoundError, ConflictError } = require("../utils/errors");
 
 async function validateEnvironmentHierarchy(projectId, envId) {
     const environment = await prisma.environment.findFirst({

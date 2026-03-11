@@ -24,7 +24,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    command: sh -c "npx prisma migrate deploy && npx nodemon --legacy-watch --watch src src/index.js"
+    command: sh -c "npx prisma migrate deploy && npx nodemon --legacy-watch --watch src src/server.js"
 
 volumes:
   pgdata:

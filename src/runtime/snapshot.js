@@ -1,5 +1,5 @@
-const prisma = require("../prisma");
-const { NotFoundError } = require("../errors");
+const prisma = require("../db/prisma");
+const { NotFoundError } = require("../utils/errors");
 
 let snapshotStore = new Map();
 let lastSnapshotVersion = null;

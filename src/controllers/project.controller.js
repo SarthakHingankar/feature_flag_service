@@ -1,4 +1,4 @@
-const { ValidationError } = require("../errors");
+const { ValidationError } = require("../utils/errors");
 const projectService = require("../services/project.service");
 
 async function createProject(req, res) {

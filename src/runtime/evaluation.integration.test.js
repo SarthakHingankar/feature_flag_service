@@ -2,7 +2,7 @@ if (!process.env.DATABASE_URL) {
     process.env.DATABASE_URL =
         "postgresql://postgres:postgres@localhost:5432/featureflags";
 }
-const prisma = require("../prisma");
+const prisma = require("../db/prisma");
 const { initializeSnapshot, getFlagsFromSnapshot } = require("./snapshot");
 const { evaluateFlags } = require("./evaluator");
 

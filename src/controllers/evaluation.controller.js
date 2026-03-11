@@ -1,6 +1,6 @@
-const { ValidationError } = require("../errors");
-const { getFlagsFromSnapshot } = require("../evaluation/snapshot");
-const { evaluateFlags } = require("../evaluation/evaluator");
+const { ValidationError } = require("../utils/errors");
+const { getFlagsFromSnapshot } = require("../runtime/snapshot");
+const { evaluateFlags } = require("../runtime/evaluator");
 
 async function getConfig(req, res) {
     const { project, env, user_id } = req.query;

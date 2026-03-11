@@ -1,5 +1,5 @@
-const prisma = require("../prisma");
-const { ConflictError } = require("../errors");
+const prisma = require("../db/prisma");
+const { ConflictError } = require("../utils/errors");
 
 async function createProject({ name }) {
     try {
