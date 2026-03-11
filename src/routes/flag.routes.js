@@ -3,8 +3,6 @@ const flagController = require("../controllers/flag.controller");
 
 const router = Router();
 
-// Express 4 does not forward rejected promises to error middleware.
-// Wrap async handlers so thrown / rejected errors reach errorHandler.
 const asyncHandler = (fn) => (req, res, next) =>
     Promise.resolve(fn(req, res, next)).catch(next);
 

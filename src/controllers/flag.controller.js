@@ -1,8 +1,6 @@
 const { ValidationError } = require("../errors");
 const flagService = require("../services/flag.service");
 
-// ─── POST /:projectId/environments/:envId/flags ──────────────────────
-
 async function createFlag(req, res) {
     const { projectId, envId } = req.params;
 
@@ -14,6 +12,27 @@ async function createFlag(req, res) {
         throw new ValidationError("Enabled must be boolean");
     }
 
+    if (req.body.rolloutPercentage !== undefined) {
+        if (
+            !Number.isInteger(req.body.rolloutPercentage) ||
+            req.body.rolloutPercentage < 0 ||
+            req.body.rolloutPercentage > 100
+        ) {
+            throw new ValidationError(
+                "rolloutPercentage must be an integer between 0 and 100"
+            );
+        }
+    }
+
+    if (req.body.targeting !== undefined && req.body.targeting !== null) {
+        if (
+            typeof req.body.targeting !== "object" ||
+            Array.isArray(req.body.targeting)
+        ) {
+            throw new ValidationError("targeting must be a JSON object or null");
+        }
+    }
+
     const flag = await flagService.createFlag({
         projectId,
         envId,
@@ -21,13 +40,13 @@ async function createFlag(req, res) {
             key: req.body.key.trim(),
             description: req.body.description || null,
             enabled: req.body.enabled,
+            rolloutPercentage: req.body.rolloutPercentage ?? 0,
+            targeting: req.body.targeting ?? null,
         },
     });
 
     return res.status(201).json(flag);
 }
-
-// ─── GET /:projectId/environments/:envId/flags ───────────────────────
 
 async function listFlags(req, res) {
     const { projectId, envId } = req.params;
@@ -40,13 +59,6 @@ async function listFlags(req, res) {
     });
 }
 
-// ─── PATCH /:projectId/environments/:envId/flags/:flagId ─────────────
-
-/**
- * Validates input, delegates to the service layer, and returns the
- * shaped HTTP response.  Errors propagate to the centralised error
- * middleware — no local try/catch required.
- */
 async function updateFlag(req, res) {
     const { projectId, envId, flagId } = req.params;
 
@@ -54,11 +66,16 @@ async function updateFlag(req, res) {
         throw new ValidationError("Invalid request body");
     }
 
-    const { enabled, description } = req.body;
+    const { enabled, description, rolloutPercentage, targeting } = req.body;
 
-    if (enabled === undefined && description === undefined) {
+    if (
+        enabled === undefined &&
+        description === undefined &&
+        rolloutPercentage === undefined &&
+        targeting === undefined
+    ) {
         throw new ValidationError(
-            "At least one field (enabled or description) must be provided"
+            "At least one field (enabled, description, rolloutPercentage, or targeting) must be provided"
         );
     }
 
@@ -70,11 +87,29 @@ async function updateFlag(req, res) {
         throw new ValidationError("Description must be string");
     }
 
+    if (rolloutPercentage !== undefined) {
+        if (
+            !Number.isInteger(rolloutPercentage) ||
+            rolloutPercentage < 0 ||
+            rolloutPercentage > 100
+        ) {
+            throw new ValidationError(
+                "rolloutPercentage must be an integer between 0 and 100"
+            );
+        }
+    }
+
+    if (targeting !== undefined && targeting !== null) {
+        if (typeof targeting !== "object" || Array.isArray(targeting)) {
+            throw new ValidationError("targeting must be a JSON object or null");
+        }
+    }
+
     const result = await flagService.updateFlag({
         projectId,
         envId,
         flagId,
-        data: { enabled, description },
+        data: { enabled, description, rolloutPercentage, targeting },
     });
 
     return res.status(200).json({
@@ -82,6 +117,8 @@ async function updateFlag(req, res) {
         key: result.key,
         description: result.description,
         enabled: result.enabled,
+        rolloutPercentage: result.rolloutPercentage,
+        targeting: result.targeting,
         createdAt: result.createdAt,
     });
 }

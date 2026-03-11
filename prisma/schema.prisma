@@ -28,14 +28,19 @@ model Environment {
 }
 
 model FeatureFlag {
-  id            String      @id @default(uuid())
-  key           String
-  description   String?
-  enabled       Boolean     @default(false)
-  environmentId String
-  environment   Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                String      @id @default(uuid())
+  key               String
+  description       String?
+  enabled           Boolean     @default(false)
+
+  rolloutPercentage Int         @default(0)
+  targeting         Json?
+
+  environmentId     String
+  environment       Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   @@unique([environmentId, key])
 }

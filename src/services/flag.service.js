@@ -1,17 +1,6 @@
 const prisma = require("../prisma");
 const { NotFoundError, ConflictError } = require("../errors");
 
-// ─── shared hierarchy check ───────────────────────────────────────────
-
-/**
- * Verify that the environment belongs to the given project.
- * Returns the environment row or throws NotFoundError.
- *
- * @param {string} projectId
- * @param {string} envId
- * @returns {Promise<object>}
- * @throws {NotFoundError}
- */
 async function validateEnvironmentHierarchy(projectId, envId) {
     const environment = await prisma.environment.findFirst({
         where: {
@@ -29,19 +18,6 @@ async function validateEnvironmentHierarchy(projectId, envId) {
     return environment;
 }
 
-// ─── create ───────────────────────────────────────────────────────────
-
-/**
- * Create a feature flag under a validated environment.
- *
- * @param {object} params
- * @param {string} params.projectId
- * @param {string} params.envId
- * @param {object} params.data  – { key, enabled, description? }
- * @returns {Promise<object>}
- * @throws {NotFoundError}
- * @throws {PrismaClientKnownRequestError} – P2002 (duplicate key)
- */
 async function createFlag({ projectId, envId, data }) {
     await validateEnvironmentHierarchy(projectId, envId);
 
@@ -51,6 +27,8 @@ async function createFlag({ projectId, envId, data }) {
                 key: data.key,
                 description: data.description,
                 enabled: data.enabled,
+                rolloutPercentage: data.rolloutPercentage,
+                targeting: data.targeting,
                 environmentId: envId,
             },
             select: {
@@ -58,6 +36,8 @@ async function createFlag({ projectId, envId, data }) {
                 key: true,
                 description: true,
                 enabled: true,
+                rolloutPercentage: true,
+                targeting: true,
                 environmentId: true,
                 createdAt: true,
             },
@@ -72,17 +52,6 @@ async function createFlag({ projectId, envId, data }) {
     }
 }
 
-// ─── list ─────────────────────────────────────────────────────────────
-
-/**
- * List all flags for a validated environment.
- *
- * @param {object} params
- * @param {string} params.projectId
- * @param {string} params.envId
- * @returns {Promise<object[]>}
- * @throws {NotFoundError}
- */
 async function listFlags({ projectId, envId }) {
     await validateEnvironmentHierarchy(projectId, envId);
 
@@ -94,6 +63,8 @@ async function listFlags({ projectId, envId }) {
             key: true,
             description: true,
             enabled: true,
+            rolloutPercentage: true,
+            targeting: true,
             createdAt: true,
         },
     });
@@ -101,22 +72,8 @@ async function listFlags({ projectId, envId }) {
     return flags;
 }
 
-// ─── update ───────────────────────────────────────────────────────────
-
-/**
- * Update a feature flag and write an atomic audit log entry.
- *
- * @param {object} params
- * @param {string} params.projectId
- * @param {string} params.envId
- * @param {string} params.flagId
- * @param {object} params.data          – fields to update (enabled, description)
- * @returns {Promise<object>}           – the updated flag row
- * @throws {NotFoundError}              – flag/env/project hierarchy not found
- * @throws {PrismaClientKnownRequestError} – e.g. P2002 (unique constraint)
- */
 async function updateFlag({ projectId, envId, flagId, data }) {
-    const { enabled, description } = data;
+    const { enabled, description, rolloutPercentage, targeting } = data;
 
     const result = await prisma.$transaction(async (tx) => {
         const flag = await tx.featureFlag.findFirst({
@@ -144,6 +101,8 @@ async function updateFlag({ projectId, envId, flagId, data }) {
                 ...(description !== undefined && {
                     description: description.trim(),
                 }),
+                ...(rolloutPercentage !== undefined && { rolloutPercentage }),
+                ...(targeting !== undefined && { targeting }),
             },
         });
 

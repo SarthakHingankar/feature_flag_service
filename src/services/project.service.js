@@ -1,16 +1,6 @@
 const prisma = require("../prisma");
 const { ConflictError } = require("../errors");
 
-// ─── create ───────────────────────────────────────────────────────────
-
-/**
- * Create a project.
- *
- * @param {object} params
- * @param {string} params.name
- * @returns {Promise<object>}
- * @throws {ConflictError}
- */
 async function createProject({ name }) {
     try {
         const project = await prisma.project.create({
@@ -26,13 +16,6 @@ async function createProject({ name }) {
     }
 }
 
-// ─── list ─────────────────────────────────────────────────────────────
-
-/**
- * List all projects.
- *
- * @returns {Promise<object[]>}
- */
 async function listProjects() {
     const projects = await prisma.project.findMany({
         orderBy: { createdAt: "desc" },

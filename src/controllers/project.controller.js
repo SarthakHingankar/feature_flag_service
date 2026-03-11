@@ -1,8 +1,6 @@
 const { ValidationError } = require("../errors");
 const projectService = require("../services/project.service");
 
-// ─── POST /projects ──────────────────────────────────────────────────
-
 async function createProject(req, res) {
     if (
         !req.body ||
@@ -18,8 +16,6 @@ async function createProject(req, res) {
 
     return res.status(201).json(project);
 }
-
-// ─── GET /projects ───────────────────────────────────────────────────
 
 async function listProjects(req, res) {
     const projects = await projectService.listProjects();

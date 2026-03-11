@@ -1,8 +1,6 @@
 const { ValidationError } = require("../errors");
 const environmentService = require("../services/environment.service");
 
-// ─── POST /:projectId/environments ───────────────────────────────────
-
 async function createEnvironment(req, res) {
     const { projectId } = req.params;
 
@@ -21,8 +19,6 @@ async function createEnvironment(req, res) {
 
     return res.status(201).json(environment);
 }
-
-// ─── GET /:projectId/environments ────────────────────────────────────
 
 async function listEnvironments(req, res) {
     const { projectId } = req.params;

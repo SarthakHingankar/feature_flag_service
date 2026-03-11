@@ -1,16 +1,6 @@
 const prisma = require("../prisma");
 const { NotFoundError, ConflictError } = require("../errors");
 
-// ─── shared hierarchy check ───────────────────────────────────────────
-
-/**
- * Verify that the project exists.
- * Returns the project row or throws NotFoundError.
- *
- * @param {string} projectId
- * @returns {Promise<object>}
- * @throws {NotFoundError}
- */
 async function validateProjectExists(projectId) {
     const project = await prisma.project.findUnique({
         where: { id: projectId },
@@ -23,18 +13,6 @@ async function validateProjectExists(projectId) {
     return project;
 }
 
-// ─── create ───────────────────────────────────────────────────────────
-
-/**
- * Create an environment under a validated project.
- *
- * @param {object} params
- * @param {string} params.projectId
- * @param {string} params.name
- * @returns {Promise<object>}
- * @throws {NotFoundError}
- * @throws {ConflictError}
- */
 async function createEnvironment({ projectId, name }) {
     await validateProjectExists(projectId);
 
@@ -63,16 +41,6 @@ async function createEnvironment({ projectId, name }) {
     }
 }
 
-// ─── list ─────────────────────────────────────────────────────────────
-
-/**
- * List all environments for a validated project.
- *
- * @param {object} params
- * @param {string} params.projectId
- * @returns {Promise<object[]>}
- * @throws {NotFoundError}
- */
 async function listEnvironments({ projectId }) {
     await validateProjectExists(projectId);
 

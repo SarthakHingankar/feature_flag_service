@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "FeatureFlag" ADD COLUMN     "rolloutPercentage" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "targeting" JSONB;
