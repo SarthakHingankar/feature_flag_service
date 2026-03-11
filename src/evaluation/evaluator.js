@@ -128,20 +128,18 @@ function evaluateFlag(userId, flag) {
         return false;
     }
 
-    const rules = flag.rules;
+    const normalizedUserId = String(userId);
 
-    for (let i = 0; i < rules.length; i++) {
-        const rule = rules[i];
+    if (
+        Array.isArray(flag.targetedUsers) &&
+        flag.targetedUsers.length > 0 &&
+        flag.targetedUsers.some((id) => String(id) === normalizedUserId)
+    ) {
+        return true;
+    }
 
-        if (rule.type === "user_target") {
-            if (isTargetedUser(userId, rule.parameters)) {
-                return true;
-            }
-        }
-
-        if (rule.type === "percentage") {
-            return evaluateRollout(userId, flag.key, rule.parameters.percentage);
-        }
+    if (flag.rolloutPercentage > 0) {
+        return evaluateRollout(normalizedUserId, flag.key, flag.rolloutPercentage);
     }
 
     return flag.defaultValue;

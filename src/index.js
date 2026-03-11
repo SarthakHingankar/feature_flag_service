@@ -5,6 +5,7 @@ const environmentRoutes = require("./routes/environment.routes");
 const flagRoutes = require("./routes/flag.routes");
 const evaluationRoutes = require("./routes/evaluation.routes");
 const errorHandler = require("./middleware/error.middleware");
+const { initializeSnapshot, startSnapshotRefreshLoop } = require("./evaluation/snapshot");
 const app = express();
 
 app.use(express.json());
@@ -90,6 +91,17 @@ app.get("/health", (req, res) => {
 
 app.use(errorHandler);
 
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
-});
+const SNAPSHOT_REFRESH_INTERVAL_MS = 30_000;
+
+initializeSnapshot()
+    .then(() => {
+        startSnapshotRefreshLoop(SNAPSHOT_REFRESH_INTERVAL_MS);
+
+        app.listen(3000, () => {
+            console.log("Server running on port 3000");
+        });
+    })
+    .catch((error) => {
+        console.error("Failed to initialize snapshot:", error);
+        process.exit(1);
+    });

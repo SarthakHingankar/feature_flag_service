@@ -1,5 +1,5 @@
 const { ValidationError } = require("../errors");
-const { getFlags } = require("../evaluation/flags.repository");
+const { getFlagsFromSnapshot } = require("../evaluation/snapshot");
 const { evaluateFlags } = require("../evaluation/evaluator");
 
 async function getConfig(req, res) {
@@ -23,7 +23,7 @@ async function getConfig(req, res) {
 
     const startTime = Date.now();
 
-    const flags = await getFlags(projectKey, environment);
+    const flags = getFlagsFromSnapshot(projectKey, environment);
     const evaluated = evaluateFlags(userId, flags);
 
     const evaluationTimeMs = Date.now() - startTime;
