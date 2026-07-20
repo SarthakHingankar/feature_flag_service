@@ -1,189 +1,241 @@
-# Feature Flag Service
+# Feature Flag Management Platform
 
-A production-grade feature flag management API built with Node.js, Express, Prisma, and PostgreSQL. Supports percentage-based rollouts, user targeting, and serves runtime evaluations from an in-memory snapshot cache for near-zero latency.
+Production-inspired SaaS platform for managing feature flags, gradual rollouts, and runtime configuration across applications. The platform supports deterministic percentage rollouts, user-level targeting, audit logging, and serves runtime evaluations from an in-memory snapshot cache for near-zero latency.
 
-## Data Model
+---
 
-```
-Project  1──*  Environment  1──*  FeatureFlag
-                                       │
-                                   AuditLog (on update)
-```
+## Overview
 
-- **Project** — top-level grouping (e.g. `shop`, `dashboard`). Unique by `name`.
-- **Environment** — deployment target under a project (e.g. `production`, `staging`). Unique by `[projectId, name]`.
-- **FeatureFlag** — a toggle scoped to one environment. Unique by `[environmentId, key]`.
-  - `enabled` — master kill switch. If `false`, the flag is off for everyone.
-  - `rolloutPercentage` — integer 0–100, controls gradual rollout.
-  - `targeting` — JSON `{ allow: ["user-id-1", "user-id-2"] }` for explicit user overrides.
-- **AuditLog** — immutable record of flag updates (before/after snapshots).
+Feature flags allow teams to release features safely without redeploying applications. This project demonstrates how a centralized feature management platform can provide runtime configuration, gradual rollouts, and targeted feature releases while keeping evaluation latency extremely low.
+
+Instead of querying the database for every request, flag configurations are periodically loaded into memory and evaluated entirely in-process, making runtime flag evaluation independent of database performance.
+
+---
+
+## Highlights
+
+- Centralized feature management across projects and environments
+- Deterministic percentage-based rollouts using SHA-256 hashing
+- User-level targeting with explicit allow lists
+- In-memory snapshot cache for zero database queries during evaluation
+- Audit logging for every flag modification
+- Layered architecture following Routes → Controllers → Services
+
+---
 
 ## Architecture
 
 ```
-src/
-├── index.js                          # Express app, route mounting, startup
-├── prisma.js                         # Shared PrismaClient instance
-├── errors.js                         # AppError, NotFoundError, ValidationError, ConflictError
-├── middleware/
-│   └── error.middleware.js           # Centralized error handler
-├── routes/
-│   ├── project.routes.js             # POST/GET /projects
-│   ├── environment.routes.js         # POST/GET /projects/:id/environments
-│   ├── flag.routes.js                # POST/GET/PATCH .../environments/:id/flags
-│   └── evaluation.routes.js          # GET /config
-├── controllers/
-│   ├── project.controller.js         # Input validation → service
-│   ├── environment.controller.js
-│   ├── flag.controller.js
-│   └── evaluation.controller.js      # Reads from snapshot, runs evaluator
-├── services/
-│   ├── project.service.js            # DB operations, conflict handling
-│   ├── environment.service.js
-│   └── flag.service.js               # Transactional update + audit log
-└── evaluation/
-    ├── snapshot.js                    # In-memory snapshot cache
-    ├── evaluator.js                  # Flag evaluation engine
-    ├── flags.repository.js           # DB-backed flag loader (used by snapshot)
-    ├── evaluator.test.js             # Unit tests
-    └── evaluation.integration.test.js # Integration tests
+                    Client Application
+                            │
+                    GET /config
+                            │
+                     Express API
+                            │
+                Evaluation Controller
+                            │
+                  Snapshot Cache (Memory)
+                            │
+                  Flag Evaluation Engine
+                            │
+          Deterministic Hash + Targeting Rules
+                            │
+                     JSON Response
+
+            ▲
+            │
+
+    Background Snapshot Refresh
+
+            │
+      PostgreSQL Database
 ```
 
-The codebase follows a **routes → controllers → services** layered pattern. Controllers handle HTTP concerns (validation, response shaping). Services handle business logic and database access. The evaluation layer is separate and reads from memory at runtime.
+---
 
-## Execution Flow
+## Tech Stack
 
-### Server Startup
+### Backend
 
-```
-1.  initializeSnapshot()
-      ├── Query all environments (with project names)
-      ├── Query all feature flags (with environment + project joins)
-      ├── Build nested Map<projectName, Map<envName, Flag[]>>
-      ├── Record MAX(updatedAt) as snapshot version
-      └── Store in global snapshotStore
-2.  startSnapshotRefreshLoop(30s)
-      └── setInterval → refreshSnapshotIfNeeded()
-3.  app.listen(3000)
+- Node.js
+- Express
 
-If snapshot initialization fails, the process exits with code 1.
-```
+### Database
 
-### Runtime: Flag Evaluation (GET /config)
+- PostgreSQL
+- Prisma ORM
 
-```
-Request:  GET /config?project=shop&env=production&user_id=user-42
-              │
-              ▼
-    evaluation.controller.js
-        ├── Validate query params
-        ├── getFlagsFromSnapshot("shop", "production")   ← O(1) Map lookup, no DB
-        ├── evaluateFlags("user-42", flags)              ← pure computation
-        └── Return JSON response
+### Testing
 
-Response: { "project": "shop", "environment": "production", "flags": { "dark-mode": true, "beta-checkout": false } }
-```
+- Jest
 
-**Zero database queries at runtime.** All flag data is served from memory.
+### Infrastructure
 
-### Flag Evaluation Logic
+- Docker
+- Docker Compose
 
-For each flag, the evaluator runs this decision tree:
+---
+
+## Data Model
 
 ```
-enabled == false?  ──yes──►  return FALSE
-       │ no
-       ▼
-user in targetedUsers?  ──yes──►  return TRUE
-       │ no
-       ▼
-rolloutPercentage > 0?  ──yes──►  hash(userId:flagKey) % 100 < percentage?  ──►  TRUE / FALSE
-       │ no
-       ▼
-return TRUE  (flag is enabled, no rules restrict it)
+Project
+   │
+   └── Environment
+          │
+          └── FeatureFlag
+                  │
+                  └── AuditLog
 ```
 
-- **Targeting takes priority over rollout.** A user in the allow-list always gets `true`.
-- **Rollout is deterministic.** Same user + same flag = same result every time (SHA-256 hash bucketing).
-- **Kill switch is absolute.** `enabled: false` = `false` for everyone, no exceptions.
+- **Project** – Logical application boundary
+- **Environment** – Deployment target (Production, Staging, etc.)
+- **Feature Flag** – Runtime configuration for an environment
+- **Audit Log** – Immutable history of configuration changes
 
-### Background Snapshot Refresh
+---
+
+## Runtime Architecture
+
+The application follows a layered architecture:
 
 ```
-Every 30 seconds:
-    ├── Query MAX(updatedAt) from FeatureFlag table  (single aggregate, not full scan)
-    ├── Compare with lastSnapshotVersion
-    ├── If unchanged → do nothing
-    └── If newer → reload full snapshot and atomically replace the global reference
+Routes
+    │
+Controllers
+    │
+Services
+    │
+Database
+
+Evaluation Layer
+    │
+Snapshot Cache
+    │
+Evaluation Engine
 ```
 
-This gives eventual consistency with minimal database load. CRUD operations hit the database directly; the snapshot catches up within the refresh interval.
+HTTP requests and runtime flag evaluation are intentionally separated. Business logic is handled through services, while runtime evaluation operates entirely from an in-memory snapshot.
 
-## API Reference
+---
+
+## Evaluation Flow
+
+```
+Client Request
+      │
+      ▼
+Validate Request
+      │
+      ▼
+Read Flags from Snapshot Cache
+      │
+      ▼
+Evaluate Rules
+      │
+      ├── Kill Switch
+      ├── User Targeting
+      └── Percentage Rollout
+      │
+      ▼
+Return Flag Configuration
+```
+
+No database queries occur during runtime evaluation.
+
+---
+
+## Engineering Decisions
+
+### Snapshot-Based Evaluation
+
+Flag configurations are periodically synchronized into memory. Runtime evaluation becomes a pure in-memory operation, eliminating database latency from every request.
+
+---
+
+### Deterministic Rollouts
+
+Percentage rollouts use SHA-256 hashing of the user identifier and flag key, ensuring the same user consistently receives the same variation.
+
+---
+
+### Layered Architecture
+
+Controllers remain responsible only for HTTP concerns while services encapsulate business logic and persistence. This separation keeps evaluation logic independent of the REST API.
+
+---
+
+### Audit Logging
+
+Every flag modification creates an immutable audit record containing before and after snapshots, enabling configuration history and rollback analysis.
+
+---
+
+## API
 
 ### Projects
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/projects` | Create a project. Body: `{ "name": "shop" }` |
-| `GET` | `/projects` | List all projects. |
+| Method | Endpoint |
+|----------|----------|
+| POST | `/projects` |
+| GET | `/projects` |
 
 ### Environments
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/projects/:projectId/environments` | Create an environment. Body: `{ "name": "production" }` |
-| `GET` | `/projects/:projectId/environments` | List environments for a project. |
+| Method | Endpoint |
+|----------|----------|
+| POST | `/projects/:projectId/environments` |
+| GET | `/projects/:projectId/environments` |
 
 ### Feature Flags
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/projects/:projectId/environments/:envId/flags` | Create a flag. Body: `{ "key": "dark-mode", "enabled": true, "rolloutPercentage": 50, "targeting": { "allow": ["user-1"] } }` |
-| `GET` | `/projects/:projectId/environments/:envId/flags` | List flags for an environment. |
-| `PATCH` | `/projects/:projectId/environments/:envId/flags/:flagId` | Update a flag. Body: any subset of `{ enabled, description, rolloutPercentage, targeting }`. Creates an audit log entry. |
+| Method | Endpoint |
+|----------|----------|
+| POST | `/projects/:projectId/environments/:envId/flags` |
+| GET | `/projects/:projectId/environments/:envId/flags` |
+| PATCH | `/projects/:projectId/environments/:envId/flags/:flagId` |
 
 ### Evaluation
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/config?project=X&env=Y&user_id=Z` | Evaluate all flags for a user. Returns `{ project, environment, flags: { key: boolean } }`. |
+| Method | Endpoint |
+|----------|----------|
+| GET | `/config` |
 
-### Other
+### System
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/audit-logs?entityType=X&entityId=Y&limit=N` | Query audit log entries. |
-| `GET` | `/health` | Health check. Returns `{ "status": "ok" }`. |
+| Method | Endpoint |
+|----------|----------|
+| GET | `/health` |
+| GET | `/audit-logs` |
 
-## Getting Started
+---
+
+## Running Locally
 
 ### Prerequisites
 
-- Docker and Docker Compose
+- Docker
+- Docker Compose
 
-### Run
+### Start
 
 ```bash
 docker compose up --build
 ```
 
-This starts PostgreSQL on port 5432, runs Prisma migrations, and starts the app on port 3000 with hot-reload via nodemon.
+The application starts PostgreSQL, runs database migrations, and launches the API.
 
-### Test
+---
 
-Tests require a running PostgreSQL instance (the Docker Compose database works):
+## Future Improvements
 
-```bash
-npm test
-```
+- SDKs for JavaScript, Go, and Java
+- Real-time flag synchronization
+- Multi-tenant organizations
+- Role-based access control
+- Environment-specific permissions
+- OpenFeature compatibility
+- Metrics and rollout analytics
+- Distributed cache synchronization
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Node.js 20, Express 5 |
-| Database | PostgreSQL 15 |
-| ORM | Prisma 6 |
-| Testing | Jest 30 |
-| Containerization | Docker, Docker Compose |
+---
